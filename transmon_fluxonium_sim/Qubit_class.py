@@ -154,9 +154,11 @@ class Qubit(ABC):
 
     def n_ij(self, i: int, j: int):
         """Return the matrix element of the charge operator in the energy eigenbasis."""
-        return np.sum(
-            np.dot(self.eig_vecs[:, i].conj(), np.dot(self.n, self.eig_vecs[:, j]))
-        )
+        return np.dot(self.eig_vecs[i].conj(), np.dot(self.n, self.eig_vecs[j]))
+
+    def Phi_ij(self, i: int, j: int):
+        """Return the matrix element of the flux operator in the energy eigenbasis."""
+        return np.dot(self.eig_vecs[i].conj(), np.dot(self.Phi, self.eig_vecs[j]))
 
     def n_qutip(self, n_levels: int, thresh=1e-4):
         """Convert the charge operator to Qutip in the energy eigenbasis."""
@@ -165,7 +167,7 @@ class Qubit(ABC):
         # ]  # Take only the first n_levels eigenvectors
         # n_matrix = eig_vecs.T @ self.n @ eig_vecs  # Transform n into energy eigenbasis
         # n_matrix[np.abs(n_matrix) < thresh] = 0  # Apply thresholding
-        n_op = -1j * np.zeros((n_levels, n_levels))
+        n_op = 1j * np.zeros((n_levels, n_levels))
         for i in range(n_levels):
             for j in range(n_levels):
                 if i == j:
@@ -178,6 +180,27 @@ class Qubit(ABC):
                             n_op[i, j] = val
                         n_op[i, j] = val
         return qt.Qobj(n_op)
+
+    def Phi_qutip(self, n_levels: int, thresh=1e-4):
+        """Convert the flux operator to Qutip in the energy eigenbasis."""
+        # eig_vecs = self.eig_vecs[
+        #     :, :n_levels
+        # ]  # Take only the first n_levels eigenvectors
+        # phi_matrix = eig_vecs.T @ self.Phi @ eig_vecs  # Transform Phi into energy eigenbasis
+        # phi_matrix[np.abs(phi_matrix) < thresh] = 0  # Apply thresholding
+        phi_op = np.zeros((n_levels, n_levels))
+        for i in range(n_levels):
+            for j in range(n_levels):
+                if i == j:
+                    phi_op[i, j] = 0
+                else:
+                    val = self.Phi_ij(i, j)
+                    if thresh is not None:
+                        if np.abs(val) < thresh:
+                            val = 0
+                            phi_op[i, j] = val
+                        phi_op[i, j] = val
+        return qt.Qobj(phi_op)
 
     def hamiltonian_qutip(self, n_levels=10):
         """Return the Hamiltonian as a Qutip operator."""
@@ -263,7 +286,16 @@ class Fluxonium(Qubit):
         # print(f"Inductor Hamiltonian: {inductor}")
         H = C - JJ + inductor
         eig_vals, eig_vecs = LA.eigh(H)
-        return eig_vals, eig_vecs
+        # Find the sign of the eigenvector values and multiply all the eigenvector values by -1 if the first value is negative.
+        for j in range(len(eig_vecs)):
+            for i in eig_vecs[j]:
+                if not np.isclose(i, 0):
+                    phase = i / np.abs(i)  # Get the phase of the complex number
+                    eig_vecs[j] = (
+                        eig_vecs[j] / phase
+                    )  # Multiply the eigenvector by the phase
+                    break
+        return eig_vals, eig_vecs.T
 
 
 # ------------------------------------------------------------------------------
@@ -370,4 +402,7 @@ class Transmon(Qubit):
         H = C - JJ
         # print(f"Total Hamiltonian: {H}")
         eig_vals, eig_vecs = LA.eigh(H)
-        return eig_vals, eig_vecs
+        for i in range(len(eig_vecs)):
+            if eig_vecs[i][0] < 0:
+                eig_vecs[i] = -eig_vecs[i]
+        return eig_vals, eig_vecs.T
