@@ -4,6 +4,7 @@ from matplotlib.widgets import Slider, Button
 import numpy as np
 import scipy.linalg as LA
 import pandas as pd
+import os
 
 import numpy as np
 import hvplot.pandas  # for hvplot support
@@ -16,6 +17,32 @@ from bokeh.io import output_notebook
 from bokeh.models import HoverTool
 
 hv.extension("matplotlib")
+
+
+def plot_matrix(matrix, filename, mode="abs"):
+    if mode == "abs":
+        data = np.abs(matrix)
+    elif mode == "real":
+        data = np.real(matrix)
+    elif mode == "imag":
+        data = np.imag(matrix)
+    elif mode == "angle":
+        data = np.angle(matrix)
+    else:
+        raise ValueError("Invalid mode. Use 'abs', 'real', 'imag', or 'angle'.")
+
+    plt.figure(figsize=(6, 5))
+    plt.imshow(data, cmap="viridis", aspect="auto")
+    plt.colorbar(label=mode)
+    plt.title(f"Matrix Plot: {filename}")
+    plt.xlabel("Columns")
+    plt.ylabel("Rows")
+
+    save_path = os.path.join(os.getcwd(), f"{filename}_{mode}.png")
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+    print(f"Plot saved as: {save_path}")
 
 
 def plot_fixed(qubit, number_levels=5):

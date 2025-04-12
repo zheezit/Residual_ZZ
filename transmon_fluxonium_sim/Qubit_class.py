@@ -168,6 +168,7 @@ class Qubit(ABC):
         # n_matrix = eig_vecs.T @ self.n @ eig_vecs  # Transform n into energy eigenbasis
         # n_matrix[np.abs(n_matrix) < thresh] = 0  # Apply thresholding
         n_op = 1j * np.zeros((n_levels, n_levels))
+        # print(f"n_op: {n_op}")
         for i in range(n_levels):
             for j in range(n_levels):
                 if i == j:
@@ -179,6 +180,7 @@ class Qubit(ABC):
                             val = 0
                             n_op[i, j] = val
                         n_op[i, j] = val
+        # print(f"n_op: {n_op}")
         return qt.Qobj(n_op)
 
     def Phi_qutip(self, n_levels: int, thresh=1e-4):
@@ -286,7 +288,15 @@ class Fluxonium(Qubit):
         # print(f"Inductor Hamiltonian: {inductor}")
         H = C - JJ + inductor
         eig_vals, eig_vecs = LA.eigh(H)
-        # Find the sign of the eigenvector values and multiply all the eigenvector values by -1 if the first value is negative.
+        eig_vecs = eig_vecs.T
+        # Find the sign of the first eigenvector and correct the sign for the rest.
+        # for j in eig_vecs[0]:
+        #     print(f"eig_vecs[0][j]: {j}")
+        #     if not np.isclose(j, 0):
+        #         phase = j / np.abs(j)  # Get the phase of the complex number
+        #         for i in range(len(eig_vecs)):
+        #             eig_vecs[i] /= phase
+        #         break
         for j in range(len(eig_vecs)):
             for i in eig_vecs[j]:
                 if not np.isclose(i, 0):
@@ -295,7 +305,7 @@ class Fluxonium(Qubit):
                         eig_vecs[j] / phase
                     )  # Multiply the eigenvector by the phase
                     break
-        return eig_vals, eig_vecs.T
+        return eig_vals, eig_vecs
 
 
 # ------------------------------------------------------------------------------
@@ -402,7 +412,92 @@ class Transmon(Qubit):
         H = C - JJ
         # print(f"Total Hamiltonian: {H}")
         eig_vals, eig_vecs = LA.eigh(H)
-        for i in range(len(eig_vecs)):
-            if eig_vecs[i][0] < 0:
-                eig_vecs[i] = -eig_vecs[i]
-        return eig_vals, eig_vecs.T
+        eig_vecs = eig_vecs.T
+        for j in range(len(eig_vecs)):
+            for i in eig_vecs[j]:
+                if not np.isclose(i, 0):
+                    phase = i / np.abs(i)  # Get the phase of the complex number
+                    eig_vecs[j] = (
+                        eig_vecs[j] / phase
+                    )  # Multiply the eigenvector by the phase
+                    break
+        return eig_vals, eig_vecs
+
+
+# ------------------------------------------------------------------------------
+# Define a helper class for two coupled qubits
+class CoupledQubits:
+    def __init__(self, qubit1, qubit2, g, n_levels=5):
+        """
+        qubit1, qubit2: instances of Transmon or Fluxonium.
+        g: coupling strength (assumed to be given in the same frequency units).
+        n_levels: number of levels to use in the truncated energy basis.
+        """
+        self.n_levels = n_levels
+        self.g = g
+        # Get the single-qubit Hamiltonians as Qutip objects.
+        # These are diagonal (energy eigenbasis, with ground state shifted to zero).
+        self.H1 = qubit1.hamiltonian_qutip(n_levels)
+        self.H2 = qubit2.hamiltonian_qutip(n_levels)
+        # Use the standard annihilation operators in a Fock space of dimension n_levels.
+        self.a1 = qt.destroy(n_levels)
+        self.a2 = qt.destroy(n_levels)
+
+        # Build the composite Hamiltonian (without any additional offset)
+        self.H_compound = qt.tensor(self.H1, qt.qeye(n_levels)) + qt.tensor(
+            qt.qeye(n_levels), self.H2
+        )
+        # Coupling term: g*(a1^dagger ⊗ a2 + a1 ⊗ a2^dagger)
+        self.H_coup = self.g * (
+            qt.tensor(self.a1.dag(), self.a2) + qt.tensor(self.a1, self.a2.dag())
+        )
+        self.H_total = self.H_compound + self.H_coup
+
+    def add_offset(self, delta):
+        """
+        Add an offset delta to the first qubit’s Hamiltonian.
+        (This allows us to sweep the detuning Δ = ωₐ - ω_b.)
+        """
+        H1_offset = self.H1 + delta * qt.qeye(self.n_levels)
+        H_compound = qt.tensor(H1_offset, qt.qeye(self.n_levels)) + qt.tensor(
+            qt.qeye(self.n_levels), self.H2
+        )
+        self.H_total = H_compound + self.H_coup
+
+    def eigenenergies(self):
+        # Returns the sorted eigenenergies of the full Hamiltonian.
+        return np.sort(self.H_total.eigenenergies())
+
+
+def total_hamiltonian_cap(h1, h2, J, n_levels):
+    """
+    Create the total Hamiltonian for two coupled systems.
+
+    Parameters:
+    H1 (qutip.Qobj): Hamiltonian of the first system.
+    H2 (qutip.Qobj): Hamiltonian of the second system.
+    J (float): Coupling strength.
+    n_levels (int): Number of states in the Hilbert space.
+
+    Returns:
+    qutip.Qobj: Total Hamiltonian.
+    """
+
+    H1 = h1.hamiltonian_qutip(n_levels=n_levels)
+    print(f"H1: {H1}")
+    H2 = h2.hamiltonian_qutip(n_levels=n_levels)
+    print(f"H2: {H2}")
+    q_H1 = h1.n_qutip(n_levels=n_levels)
+    print(f"q_H1: {q_H1}")
+    q_H2 = h2.n_qutip(n_levels=n_levels)
+    print(f"q_H2: {q_H2}")
+    h_id = qt.qeye(n_levels)
+    print(f"h_id: {h_id}")
+    H1_qt = qt.tensor([H1, h_id])
+    print(f"H1_qt: {H1_qt}")
+    H2_qt = qt.tensor([h_id, H2])
+    print(f"H2_qt: {H2_qt}")
+
+    H_coupling = J * qt.tensor([q_H1, q_H2])
+    print(f"H_coupling: {H_coupling}")
+    return 2 * np.pi * (H1_qt + H2_qt + H_coupling)
