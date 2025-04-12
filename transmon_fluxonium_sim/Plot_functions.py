@@ -19,32 +19,6 @@ from bokeh.models import HoverTool
 hv.extension("matplotlib")
 
 
-def plot_matrix(matrix, filename, mode="abs"):
-    if mode == "abs":
-        data = np.abs(matrix)
-    elif mode == "real":
-        data = np.real(matrix)
-    elif mode == "imag":
-        data = np.imag(matrix)
-    elif mode == "angle":
-        data = np.angle(matrix)
-    else:
-        raise ValueError("Invalid mode. Use 'abs', 'real', 'imag', or 'angle'.")
-
-    plt.figure(figsize=(6, 5))
-    plt.imshow(data, cmap="viridis", aspect="auto")
-    plt.colorbar(label=mode)
-    plt.title(f"Matrix Plot: {filename}")
-    plt.xlabel("Columns")
-    plt.ylabel("Rows")
-
-    save_path = os.path.join(os.getcwd(), f"{filename}_{mode}.png")
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=300)
-    plt.close()
-    print(f"Plot saved as: {save_path}")
-
-
 def plot_fixed(qubit, number_levels=5):
     fig, ax = plt.subplots()
     potential = qubit.potential()
@@ -255,6 +229,8 @@ from bokeh.layouts import column
 from bokeh.io import output_notebook, show
 import holoviews as hv
 import numpy as np
+from matplotlib.colors import TwoSlopeNorm, ListedColormap
+from matplotlib.colors import LinearSegmentedColormap
 
 
 def interactive_fluxonium_plot(fluxonium, number_levels=5):
@@ -328,3 +304,132 @@ def interactive_fluxonium_plot(fluxonium, number_levels=5):
 
     # Display the interactive plot in the notebook
     show(layout)
+
+
+# Saving functions -------------------------------------------------------------------------------------
+
+
+def save_plot(filename, fig, dpi=300, format="png"):
+    """
+    Save a matplotlib figure to the same folder as the script.
+
+    Parameters:
+    -----------
+    filename : str
+        Name of the file without extension
+    fig : matplotlib.figure.Figure
+        The matplotlib figure to save
+    dpi : int, optional
+        Resolution in dots per inch, defaults to 300
+    format : str, optional
+        File format, defaults to "png"
+    """
+    save_path = os.path.join(os.getcwd(), f"{filename}.{format}")
+    fig.savefig(save_path, dpi=dpi, bbox_inches="tight")
+    print(f"Plot saved as: {save_path}")
+
+
+def save_matrix(
+    filename,
+    matrix,
+    mode="abs",
+    format="png",
+    x_labels=None,
+    y_labels=None,
+    title=None,
+    cmap="viridis",
+):
+    """
+    Visualize and save a matrix as a heatmap.
+
+    Parameters:
+    -----------
+    filename : str
+        Base name for the saved file
+    matrix : numpy.ndarray or QuTiP Qobj
+        The matrix to visualize
+    mode : str, optional
+        Visualization mode: 'abs', 'real', 'imag', or 'angle'
+    format : str, optional
+        Output file format
+    x_labels, y_labels : list, optional
+        Custom labels for axes
+    title : str, optional
+        Custom plot title
+    cmap : str, optional
+        Matplotlib colormap name
+    """
+    # Check if input is a QuTiP Qobj and convert to numpy array if needed
+    if hasattr(matrix, "full"):  # QuTiP Qobj objects have a 'full' method
+        matrix = matrix.full()  # Convert Qobj to numpy array
+    elif hasattr(matrix, "toarray"):  # For sparse matrices
+        matrix = matrix.toarray()
+
+    print(f"Processing matrix with shape: {matrix.shape}")
+
+    # Process matrix based on mode
+    if mode == "abs":
+        data = np.abs(matrix)
+        cbar_label = "Absolute Value"
+    elif mode == "real":
+        data = np.real(matrix)
+        cbar_label = "Real Part"
+    elif mode == "imag":
+        data = np.imag(matrix)
+        cbar_label = "Imaginary Part"
+    elif mode == "angle":
+        data = np.angle(matrix)
+        cbar_label = "Phase (radians)"
+    else:
+        raise ValueError("Invalid mode. Use 'abs', 'real', 'imag', or 'angle'.")
+
+    # Create figure correctly
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    # Create custom colormaps with earth tones
+
+    if np.all(data >= 0):  # All positive values
+        # Light beige to forest green gradient for positive values
+        custom_cmap = LinearSegmentedColormap.from_list(
+            "beige_to_green", ["#f5f0e1", "#2c6e49"]  # Light beige to forest green
+        )
+        norm = None
+    else:  # Contains negative values or mixed
+        # Terracotta for negative, beige for zero, sage green for positive
+        custom_cmap = LinearSegmentedColormap.from_list(
+            "terracotta_beige_sage", ["#b84a3b", "#f5f0e1", "#6b9080"]
+        )
+        vmax = max(abs(np.max(data)), abs(np.min(data)))
+        norm = TwoSlopeNorm(vmin=-vmax, vcenter=0, vmax=vmax)
+
+    # Create heatmap with custom colormap
+    heatmap = ax.imshow(data, cmap=custom_cmap, norm=norm, origin="upper")
+
+    # Add a colorbar
+    fig.colorbar(heatmap, ax=ax, label=cbar_label)
+
+    # Set tick positions and labels
+    ax.set_xticks(np.arange(data.shape[1]))
+    ax.set_yticks(np.arange(data.shape[0]))
+
+    if x_labels:
+        ax.set_xticklabels(x_labels)
+    if y_labels:
+        ax.set_yticklabels(y_labels)
+
+    # Add grid lines
+    ax.set_xticks(np.arange(data.shape[1] + 1) - 0.5, minor=True)
+    ax.set_yticks(np.arange(data.shape[0] + 1) - 0.5, minor=True)
+    ax.grid(which="minor", color="w", linestyle="-", linewidth=0.5)
+
+    # Add labels and title
+    ax.set_title(title if title else f"Matrix Plot: {filename} ({mode})")
+    ax.set_xlabel("Column Index")
+    ax.set_ylabel("Row Index")
+
+    # Save the figure
+    save_path = os.path.join(os.getcwd(), f"{filename}.{format}")
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Plot saved as: {save_path}")
