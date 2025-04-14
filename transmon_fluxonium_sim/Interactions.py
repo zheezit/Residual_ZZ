@@ -42,7 +42,6 @@ def residual_zz(total_Hamiltonian):
     """Calculate the residual ZZ coupling from the total Hamiltonian."""
     # Get the eigenvalues and eigenvectors of the total Hamiltonian
     eig_vals, eig_vecs = LA.eigh(total_Hamiltonian)
-    eig_vecs = eig_vecs.T
 
     # Calculate the residual ZZ coupling
     residual_zz = np.zeros((len(eig_vals), len(eig_vals)), dtype=complex)
@@ -59,3 +58,10 @@ def compute_zz(energies):
     # energies is an array (sorted in ascending order)
     E00, E01, E10, E11 = energies[0], energies[1], energies[2], energies[3]
     return (E11 - E01) - (E10 - E00)
+
+
+def gate_freqs(eigs):
+    CZ20 = np.abs(eigs[3] - eigs[5])
+    CZ02 = np.abs(eigs[3] - eigs[4])
+    iswap = np.abs(eigs[2] - eigs[1])
+    return np.array([CZ20, CZ02, iswap])

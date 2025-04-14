@@ -1,3 +1,4 @@
+from matplotlib.pylab import eig
 import numpy as np
 import scipy.linalg as LA
 import matplotlib.pyplot as plt
@@ -50,7 +51,7 @@ class Qubit(ABC):
         self._diag_base = np.linspace(-1, 1, self._N)
         self._off_diag = np.ones(self._N - 1)
         self._diag = np.ones(self._N)
-        print(f"Generated self._diag_base = {self._diag_base}")
+        # print(f"Generated self._diag_base = {self._diag_base}")
 
     def _update_basis(self, calc_hamiltonian=True):
         """
@@ -111,15 +112,19 @@ class Qubit(ABC):
         # print(f"Delta: {delta}")
         self.phi = self._cutoff * self._diag_base  # phi is a list.
         Phi = np.diag(self.phi)  # Phi is a diag matrix
+        # print(f"Phi: {Phi}")
         n = (-1j * hbar / (2 * delta)) * (
             -np.diag(self._off_diag, -1) + np.diag(self._off_diag, 1)
         )
+        # print(f"n: {n}")
         # self.off_diag_base = np.linspace(-1, 1, self._N - 1)
         n_2 = (-(hbar**2) / delta**2) * (
             np.diag(self._diag * -2)
             + np.diag(self._off_diag, -1)
             + np.diag(self._off_diag, 1)
         )
+        # print(f"n: {n}")
+        # print(f"n_2: {n_2}")
         return Phi, n, n_2
 
     def charge_basis(self):
@@ -193,15 +198,12 @@ class Qubit(ABC):
         phi_op = np.zeros((n_levels, n_levels))
         for i in range(n_levels):
             for j in range(n_levels):
-                if i == j:
-                    phi_op[i, j] = 0
-                else:
-                    val = self.Phi_ij(i, j)
-                    if thresh is not None:
-                        if np.abs(val) < thresh:
-                            val = 0
-                            phi_op[i, j] = val
+                val = self.Phi_ij(i, j)
+                if thresh is not None:
+                    if np.abs(val) < thresh:
+                        val = 0
                         phi_op[i, j] = val
+                    phi_op[i, j] = val
         return qt.Qobj(phi_op)
 
     def hamiltonian_qutip(self, n_levels=10):
@@ -280,23 +282,32 @@ class Fluxonium(Qubit):
         )
 
     def hamiltonian(self):
+        # capacitance term
         C = np.dot(4 * self.E_C, self.n_2)
         # print(f"Charge basis Hamiltonian: {C}")
-        JJ = np.diag(self.E_J * np.cos(np.diag(self.Phi) - self.phi_ext))
+
+        # Josephson energy term
+        if self._basis == "flux":
+            # In flux basis, Phi is diagonal => apply cos(φ - φ_ext) directly
+            JJ = np.diag(self.E_J * np.cos(np.diag(self.Phi) - self.phi_ext))
+            # Inductive energy: (1/2) * E_L * phi^2
+            inductor = np.diag(0.5 * self.E_L * np.diag(self.Phi) ** 2)
+        else:
+            # In charge basis, Phi is the cos(φ) operator already (hopping matrix)
+            JJ = self.E_J * self.Phi
+            # No flux operator for inductive term in charge basis
+            inductor = np.zeros_like(JJ)
         # print(f"Josephson junction Hamiltonian: {JJ}")
-        inductor = np.diag(0.5 * self.E_L * np.diag(self.Phi) ** 2)
         # print(f"Inductor Hamiltonian: {inductor}")
+
+        # Total Hamiltonian
         H = C - JJ + inductor
+
+        # Generate and correct eigenvalues and eigenvectors
         eig_vals, eig_vecs = LA.eigh(H)
+        eig_vals = eig_vals - eig_vals[0]  # Shift eigenvalues to start from zero
+        # print(f"Eigenvalues: {eig_vals}")
         eig_vecs = eig_vecs.T
-        # Find the sign of the first eigenvector and correct the sign for the rest.
-        # for j in eig_vecs[0]:
-        #     print(f"eig_vecs[0][j]: {j}")
-        #     if not np.isclose(j, 0):
-        #         phase = j / np.abs(j)  # Get the phase of the complex number
-        #         for i in range(len(eig_vecs)):
-        #             eig_vecs[i] /= phase
-        #         break
         for j in range(len(eig_vecs)):
             for i in eig_vecs[j]:
                 if not np.isclose(i, 0):
@@ -400,18 +411,38 @@ class Transmon(Qubit):
 
     @property
     def potential(self):
-        return -np.dot(self.E_J, np.diag(self.Phi))
+        if self._basis == "flux":
+            # Potential energy term: E_J * cos(phi - phi_ext)
+            return -self.E_J * np.cos(self.phi) + 12
+        else:
+            return -np.dot(self.E_J, np.diag(self.Phi))
 
     def hamiltonian(self):
-        C = np.diag(np.dot(4 * self.E_C, (np.diag(self.n) - self.ng) ** 2))
-        # print(f"Charge basis Hamiltonian: {C}")
-        JJ = np.dot(
-            self.E_J, self.Phi
-        )  # this phi already has the cos(phi) in the charge basis
-        # print(f"Josephson junction Hamiltonian: {JJ}")
-        H = C - JJ
+        # Josephson energy term: E_J * cos(phi - phi_ext)
+        if self._basis == "flux":
+            # Charging energy term: 4E_C(n - n_g)^2
+            # C = np.diag(np.dot(4 * self.E_C, (np.diag(self.n) - self.ng) ** 2))
+            C = np.dot(4 * self.E_C, (self.n_2 - 2 * np.dot(self.n, self.ng)))
+            # print(f"Capacitance part: {C}")
+            # C = np.dot(4 * self.E_C, self.n_2)
+            # print(f"Capacitance part: {C}")
+            # Phi is diagonal in flux basis -> use cos(Phi)
+            JJ = np.diag(-self.E_J * np.cos(np.diag(self.Phi)))
+        else:
+            # Charging energy term: 4E_C(n - n_g)^2
+            C = np.diag(np.dot(4 * self.E_C, (np.diag(self.n) - self.ng) ** 2))
+            # Phi is cos(φ) operator in charge basis
+            JJ = -self.E_J * self.Phi
+        # print(f"Capacitance part: {C}")
+        # print(f"Josephson part: {JJ}")
+
+        # Total hamiltonian
+        H = C + JJ
         # print(f"Total Hamiltonian: {H}")
+
+        # Calculate and correct eigenvalues and eigenvectors
         eig_vals, eig_vecs = LA.eigh(H)
+        eig_vals = eig_vals - eig_vals[0]  # Shift eigenvalues to start from zero
         eig_vecs = eig_vecs.T
         for j in range(len(eig_vecs)):
             for i in eig_vecs[j]:
@@ -469,7 +500,7 @@ class CoupledQubits:
         return np.sort(self.H_total.eigenenergies())
 
 
-def total_hamiltonian_cap(h1, h2, J, n_levels):
+def total_hamiltonian_cap(h1, h2, J, n):
     """
     Create the total Hamiltonian for two coupled systems.
 
@@ -483,15 +514,15 @@ def total_hamiltonian_cap(h1, h2, J, n_levels):
     qutip.Qobj: Total Hamiltonian.
     """
 
-    H1 = h1.hamiltonian_qutip(n_levels=n_levels)
+    H1 = h1.hamiltonian_qutip(n_levels=n)
     print(f"H1: {H1}")
-    H2 = h2.hamiltonian_qutip(n_levels=n_levels)
+    H2 = h2.hamiltonian_qutip(n_levels=n)
     print(f"H2: {H2}")
-    q_H1 = h1.n_qutip(n_levels=n_levels)
+    q_H1 = h1.n_qutip(n_levels=n)
     print(f"q_H1: {q_H1}")
-    q_H2 = h2.n_qutip(n_levels=n_levels)
+    q_H2 = h2.n_qutip(n_levels=n)
     print(f"q_H2: {q_H2}")
-    h_id = qt.qeye(n_levels)
+    h_id = qt.qeye(n)
     print(f"h_id: {h_id}")
     H1_qt = qt.tensor([H1, h_id])
     print(f"H1_qt: {H1_qt}")
@@ -501,3 +532,10 @@ def total_hamiltonian_cap(h1, h2, J, n_levels):
     H_coupling = J * qt.tensor([q_H1, q_H2])
     print(f"H_coupling: {H_coupling}")
     return 2 * np.pi * (H1_qt + H2_qt + H_coupling)
+
+
+def gate_freqs(eigs):
+    CZ20 = np.abs(eigs[3] - eigs[5])
+    CZ02 = np.abs(eigs[3] - eigs[4])
+    iswap = np.abs(eigs[2] - eigs[1])
+    return np.array([CZ20, CZ02, iswap])
