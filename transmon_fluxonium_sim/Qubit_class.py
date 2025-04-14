@@ -532,10 +532,3 @@ def total_hamiltonian_cap(h1, h2, J, n):
     H_coupling = J * qt.tensor([q_H1, q_H2])
     print(f"H_coupling: {H_coupling}")
     return 2 * np.pi * (H1_qt + H2_qt + H_coupling)
-
-
-def gate_freqs(eigs):
-    CZ20 = np.abs(eigs[3] - eigs[5])
-    CZ02 = np.abs(eigs[3] - eigs[4])
-    iswap = np.abs(eigs[2] - eigs[1])
-    return np.array([CZ20, CZ02, iswap])
