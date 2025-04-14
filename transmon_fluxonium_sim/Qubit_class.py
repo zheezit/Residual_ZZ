@@ -322,8 +322,6 @@ class Fluxonium(Qubit):
 # ------------------------------------------------------------------------------
 # Transmon Qubit child class
 # ------------------------------------------------------------------------------
-
-
 class Transmon(Qubit):
     """This class is a child class of the Qubit class. It is a flux-tunable transmon qubit."""
 
@@ -456,7 +454,7 @@ class Transmon(Qubit):
 
 
 # ------------------------------------------------------------------------------
-# Define a helper class for two coupled qubits
+# Define a helper class for two coupled qubits - not using
 class CoupledQubits:
     def __init__(self, qubit1, qubit2, g, n_levels=5):
         """
@@ -498,37 +496,3 @@ class CoupledQubits:
     def eigenenergies(self):
         # Returns the sorted eigenenergies of the full Hamiltonian.
         return np.sort(self.H_total.eigenenergies())
-
-
-def total_hamiltonian_cap(h1, h2, J, n):
-    """
-    Create the total Hamiltonian for two coupled systems.
-
-    Parameters:
-    H1 (qutip.Qobj): Hamiltonian of the first system.
-    H2 (qutip.Qobj): Hamiltonian of the second system.
-    J (float): Coupling strength.
-    n_levels (int): Number of states in the Hilbert space.
-
-    Returns:
-    qutip.Qobj: Total Hamiltonian.
-    """
-
-    H1 = h1.hamiltonian_qutip(n_levels=n)
-    print(f"H1: {H1}")
-    H2 = h2.hamiltonian_qutip(n_levels=n)
-    print(f"H2: {H2}")
-    q_H1 = h1.n_qutip(n_levels=n)
-    print(f"q_H1: {q_H1}")
-    q_H2 = h2.n_qutip(n_levels=n)
-    print(f"q_H2: {q_H2}")
-    h_id = qt.qeye(n)
-    print(f"h_id: {h_id}")
-    H1_qt = qt.tensor([H1, h_id])
-    print(f"H1_qt: {H1_qt}")
-    H2_qt = qt.tensor([h_id, H2])
-    print(f"H2_qt: {H2_qt}")
-
-    H_coupling = J * qt.tensor([q_H1, q_H2])
-    print(f"H_coupling: {H_coupling}")
-    return 2 * np.pi * (H1_qt + H2_qt + H_coupling)

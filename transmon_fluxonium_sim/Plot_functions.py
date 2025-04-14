@@ -211,7 +211,7 @@ def plot_spectrum(
     wavefunctions = {}
     # Plot eigenstates
     for x in range(n_levels):
-        print(x)
+        # print(x)
         (wavefunctions["line{0}".format(x)],) = ax.plot(
             base, (50 * eig_vecs[x] + eig_vals[x]), label=f"\u03a8_{x}"
         )
@@ -230,13 +230,13 @@ def plot_spectrum(
             color=wavefunctions["line{0}".format(x)].get_color(),
         )
 
-        print(eig_vals[x])
-        print(eig_vecs[x])
+        # print(eig_vals[x])
+        # print(eig_vecs[x])
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_xlim([-cutoff, cutoff])
-    print(f"cutoff: {cutoff}")
+    # print(f"cutoff: {cutoff}")
     if title:
         ax.set_title(title)
     if ylim:
