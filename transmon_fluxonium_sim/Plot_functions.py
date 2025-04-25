@@ -170,7 +170,7 @@ def plot_spectrum(
     potential_vals: np.array = None,
     eig_vals: np.array = None,
     eig_vecs=None,
-    title=None,
+    title="Spectrum",
     ylabel=r"Energy/$h$ (GHz)",
     xlabel=r"$\phi$",
     base_unit_label=None,
@@ -180,6 +180,10 @@ def plot_spectrum(
     filename="spectrum_plot",
     format="png",
     show_prob_density=True,
+    E_C=0,
+    E_J=0,
+    E_L=0,
+    anharmonicity=0,
 ):
     """
     General plotting function for visualizing qubit energy spectrum and wavefunctions.
@@ -203,7 +207,22 @@ def plot_spectrum(
 
     # Plot potential, if provided
     if potential_vals is not None:
-        ax.plot(base, potential_vals, label="Potential", lw=1)
+        # Find the smallest value in potential_vals
+        min_val = np.min(potential_vals)
+        print(f"Minimum potential value: {min_val}")
+
+        # If the smallest value is 0, use 0.0001 instead
+        if min_val == 0:
+            min_val = 0.0001
+
+        # Add this value to the potential
+        adjusted_potential = potential_vals - min_val - 0.5
+
+        # Plot the adjusted potential
+        ax.plot(base, adjusted_potential, label="Potential", lw=1)
+        # ax.plot(base, potential_vals, label="Potential", lw=1)
+
+    wr = np.round(eig_vals[1] - eig_vals[0], 6)
 
     # Normalize eigenvalues to ground state
     eig_vals = eig_vals - eig_vals[0]
@@ -213,7 +232,7 @@ def plot_spectrum(
     for x in range(n_levels):
         # print(x)
         (wavefunctions["line{0}".format(x)],) = ax.plot(
-            base, (50 * eig_vecs[x] + eig_vals[x]), label=f"\u03a8_{x}"
+            base, (20 * eig_vecs[x] + eig_vals[x]), label=f"\u03a8_{x}"
         )
         lines["line{0}".format(x)] = ax.axhline(
             y=eig_vals[x],
@@ -237,8 +256,10 @@ def plot_spectrum(
     ax.set_ylabel(ylabel)
     ax.set_xlim([-cutoff, cutoff])
     # print(f"cutoff: {cutoff}")
-    if title:
-        ax.set_title(title)
+    ax.set_title(
+        f"{title} wr={wr} GHz \n, E_C:{E_C}, E_J:{E_J}, E_L:{E_L}, a:{anharmonicity}"
+    )
+
     if ylim:
         ax.set_ylim(ylim)
 
@@ -251,98 +272,154 @@ def plot_spectrum(
         ax.xaxis.set_major_locator(plt.MultipleLocator(base=np.pi))
 
     ax.legend(frameon=False, loc="upper right")
-
-    # Save the figure
-    save_path = os.path.join(os.getcwd(), f"{filename}.{format}")
-    fig.tight_layout()
-    fig.savefig(save_path, dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    print(f"Plot saved as: {save_path}")
+    return ax
 
 
-def plot_spectrum2(
+def plot_spectrum_2(
+    ax,  # Pass the specific axis to plot on (e.g., self.ax3, self.ax4)
     base: np.array,
     potential_vals: np.array = None,
     eig_vals: np.array = None,
     eig_vecs=None,
-    title=None,
-    ylabel="Energy",
-    xlabel="Coordinate",
+    title="Spectrum",
+    ylabel=r"Energy/$h$ (GHz)",
+    xlabel=r"$\phi$",
     base_unit_label=None,
     ylim=None,
     n_levels=5,
-    filename="spectrum_plot",
+    cutoff: float = 2 * np.pi,
+    filename=None,  # Optional, only used if you want to save separately
     format="png",
     show_prob_density=True,
+    E_C=0,
+    E_J=0,
+    E_L=0,
+    anharmonicity=0,
 ):
     """
-    General plotting function for visualizing qubit energy spectrum and wavefunctions.
+    Plot qubit spectrum directly onto an existing matplotlib axis.
 
     Parameters:
-    - base: np.array, coordinate values (e.g. phi, n)
-    - potential_vals: np.array or None, potential energy values (optional)
+    - ax: matplotlib axis to plot on
+    - base: np.array, coordinate values (e.g., phi, n)
+    - potential_vals: np.array or None, potential energy values
     - eig_vals: np.array, eigenvalues
-    - eig_vecs: np.array, eigenvectors (columns = wavefunctions)
-    - title: str, optional plot title
-    - ylabel: str, y-axis label
-    - xlabel: str, x-axis label
-    - base_unit_label: str, label to use instead of numeric base ticks (e.g. π)
-    - ylim: tuple, y-axis limits
-    - n_levels: int, number of eigenstates to show
-    - filename: str, name of the file to save
-    - format: str, file format ('png', 'pdf', etc.)
-    - show_prob_density: bool, if True plots |ψ|² instead of ψ
+    - eig_vecs: np.array, eigenvectors
+    - title: str, plot title
+    - Other parameters for customization
     """
-    fig, ax = plt.subplots()
+    # Clear the axis first (although this is usually done in the calling function)
+    ax.clear()
 
     # Plot potential, if provided
     if potential_vals is not None:
-        ax.plot(base, potential_vals, label="Potential", lw=1)
+        # Find the smallest value in potential_vals
+        min_val = np.min(potential_vals)
+        print(f"Minimum potential value: {min_val}")
+
+        # If the smallest value is 0, use 0.0001 instead
+        if min_val == 0:
+            min_val = 0.0001
+
+        # Add this value to the potential
+        adjusted_potential = potential_vals - min_val - 0.5
+
+        # Plot the adjusted potential
+        ax.plot(base, adjusted_potential, label="Potential", lw=1)
+
+    # Calculate transition frequency
+    wr = np.round(eig_vals[1] - eig_vals[0], 6)
 
     # Normalize eigenvalues to ground state
     eig_vals = eig_vals - eig_vals[0]
+    lines = {}
+    wavefunctions = {}
 
     # Plot eigenstates
-    for i in range(min(n_levels, len(eig_vals))):
-        color = style_colors[i % len(style_colors)]
-        wave = eig_vecs[i]
-        if show_prob_density:
-            wave = np.abs(wave) ** 2
-        scaled_wave = 5 * wave + eig_vals[i]
-        ax.plot(base, scaled_wave, color=color, label=rf"$\Psi_{i}$")
-        ax.axhline(y=eig_vals[i], color=color, linestyle="--", lw=1)
+    for x in range(min(n_levels, len(eig_vals))):
+        # print(x)
+        (wavefunctions["line{0}".format(x)],) = ax.plot(
+            base, (20 * eig_vecs[x] + eig_vals[x]), label=f"\u03a8_{x}"
+        )
+        lines["line{0}".format(x)] = ax.axhline(
+            y=eig_vals[x],
+            color=wavefunctions["line{0}".format(x)].get_color(),
+            linestyle="--",
+            lw=1,
+        )
+        # add aotation to the energy levels |n>
+        label_text = r"$|{0}\rangle$".format(x)
         ax.text(
-            base[-1] + 0.02 * (base[-1] - base[0]),
-            eig_vals[i],
-            rf"$|{i}\rangle$",
-            color=color,
-            va="center",
+            cutoff + 0.2,
+            eig_vals[x],
+            label_text,
+            color=wavefunctions["line{0}".format(x)].get_color(),
         )
 
+        # # Handle different ways eigenvectors might be structured
+        # if hasattr(eig_vecs, "shape") and len(eig_vecs.shape) > 1:
+        #     # If eig_vecs is a 2D array where columns are eigenvectors
+        #     if eig_vecs.shape[1] > x:
+        #         eigenvector = eig_vecs[:, x]
+        #     else:
+        #         eigenvector = eig_vecs[x]
+        # else:
+        #     # If eig_vecs is a list of eigenvectors or similar structure
+        #     eigenvector = eig_vecs[x]
+
+        # # Scale and plot the wavefunction
+        # scaled_wave = 5 * eigenvector + eig_vals[x]
+        # (wavefunctions[f"line{x}"],) = ax.plot(
+        #     base, scaled_wave, label=f"\u03a8_{x}"
+        # )
+
+        # # Add horizontal line at eigenvalue
+        # lines[f"line{x}"] = ax.axhline(
+        #     y=eig_vals[x],
+        #     color=color,
+        #     linestyle="--",
+        #     lw=1,
+        # )
+
+        # # Add label for energy level
+        # label_text = r"$|{0}\rangle$".format(x)
+        # ax.text(
+        #     cutoff * 0.8,
+        #     eig_vals[x],
+        #     label_text,
+        #     color=color,
+        # )
+
+    # Set axis labels and title
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    if title:
-        ax.set_title(title)
+    ax.set_xlim([-cutoff, cutoff])
+    ax.set_title(
+        f"{title} wr={wr} GHz \nE_C:{E_C}, E_J:{E_J}, E_L:{E_L}, a:{anharmonicity}"
+    )
+
     if ylim:
         ax.set_ylim(ylim)
-    ax.set_xlim([base[0], base[-1]])
 
+    # Format x-axis for π units if specified
     if base_unit_label == "pi":
         ax.xaxis.set_major_formatter(
             plt.FuncFormatter(
-                lambda val, pos: "{:.0g}$\pi$".format(val / np.pi) if val != 0 else "0"
+                lambda val, pos: r"{:.0g}$\pi$".format(val / np.pi) if val != 0 else "0"
             )
         )
         ax.xaxis.set_major_locator(plt.MultipleLocator(base=np.pi))
 
     ax.legend(frameon=False, loc="upper right")
 
-    # Save the figure
-    save_path = os.path.join(os.getcwd(), f"{filename}.{format}")
-    fig.tight_layout()
-    fig.savefig(save_path, dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    print(f"Plot saved as: {save_path}")
+    # Optional: Save as separate file if filename is provided
+    if filename:
+        save_path = os.path.join(os.getcwd(), f"{filename}.{format}")
+        plt.figure()
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"Plot saved as: {save_path}")
+
+    return ax
 
 
 # functions that i dont know if work yet ----------------------------------------------------

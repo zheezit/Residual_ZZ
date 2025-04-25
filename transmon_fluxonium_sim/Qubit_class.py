@@ -411,7 +411,7 @@ class Transmon(Qubit):
     def potential(self):
         if self._basis == "flux":
             # Potential energy term: E_J * cos(phi - phi_ext)
-            return -self.E_J * np.cos(self.phi) + 12
+            return -self.E_J * np.cos(self.phi)
         else:
             return -np.dot(self.E_J, np.diag(self.Phi))
 
