@@ -25,12 +25,12 @@ class Qubit(ABC):
     def __init__(
         self,
         N: int = None,
-        cutoff: float = None,
+        phi_range: float = None,
         basis: str = None,
         init_hamiltonian: bool = True,  # Flag to control when to calculate the Hamiltonian
     ):
         self._N = N if N is not None else 1001
-        self._cutoff = cutoff if cutoff is not None else 4 * np.pi
+        self._phi_range = phi_range if phi_range is not None else 4 * np.pi
         self._basis = basis  # Basis is set by child classes
         self.eig_vals = None  # Store eigenvalues here
         self.eig_vecs = None  # Store eigenvectors here
@@ -39,7 +39,7 @@ class Qubit(ABC):
 
         self._update_basis(
             calc_hamiltonian=False
-        )  # Update the basis when N or cutoff changes
+        )  # Update the basis when N or phi_range changes
         if init_hamiltonian:
             self._calc_H()  # Only calculate if flag is True
 
@@ -55,10 +55,10 @@ class Qubit(ABC):
 
     def _update_basis(self, calc_hamiltonian=True):
         """
-        Recompute basis matrices when basis, N, or cutoff changes.
+        Recompute basis matrices when basis, N, or phi_range changes.
         Also update the discretization operators.
         """
-        # If parameters like N or cutoff change, update the operators
+        # If parameters like N or phi_range change, update the operators
         self._gen_operators()
         # print(f"Updating basis: {self._basis}")
 
@@ -87,12 +87,12 @@ class Qubit(ABC):
         self._update_basis()
 
     @property
-    def cutoff(self):
-        return self._cutoff
+    def phi_range(self):
+        return self._phi_range
 
-    @cutoff.setter
-    def cutoff(self, value: float):
-        self._cutoff = value
+    @phi_range.setter
+    def phi_range(self, value: float):
+        self._phi_range = value
         self._update_basis()
 
     @property
@@ -108,35 +108,45 @@ class Qubit(ABC):
 
     def flux_basis(self):
         """Construct flux basis operators."""
-        delta = np.diff(self._cutoff * self._diag_base)[0]  # Step size
+        delta = np.diff(self._phi_range * self._diag_base)[0]  # Step size
         # print(f"Delta: {delta}")
-        self.phi = self._cutoff * self._diag_base  # phi is a list.
+        self.phi = (self._phi_range / 2) * self._diag_base  # phi is a list.
+        print(f"phi: {self.phi}")
         Phi = np.diag(self.phi)  # Phi is a diag matrix
+        print(f"Phi: {Phi}")
         # print(f"Phi: {Phi}")
-        n = (-1j * hbar / (2 * delta)) * (
+        q = (-1j * hbar / (2 * delta)) * (
             -np.diag(self._off_diag, -1) + np.diag(self._off_diag, 1)
         )
+        n = q / (2 * e)  # Charge operator in flux basis
         # print(f"n: {n}")
         # self.off_diag_base = np.linspace(-1, 1, self._N - 1)
-        n_2 = (-(hbar**2) / delta**2) * (
+        q_2 = (-(hbar**2) / delta**2) * (
             np.diag(self._diag * -2)
             + np.diag(self._off_diag, -1)
             + np.diag(self._off_diag, 1)
         )
+        n_2 = q_2 / (4 * e**2)  # Charge operator in flux basis
         # print(f"n: {n}")
         # print(f"n_2: {n_2}")
         return Phi, n, n_2
 
     def charge_basis(self):
         """Construct charge basis operators."""
-        n_cutoff = np.arange(
+        n_range = np.arange(
             -(self._N // 2), (self._N // 2) + 1
         )  # Charge basis states with integers between -N and N
-        # print(f"n_cutoff = {n_cutoff}")
-        n = np.diag(n_cutoff)
-        # print(f"n: {n}")
-        n_2 = np.diag(n_cutoff**2)
-        # print(f"n_2: {n_2}")
+        # print(f"n_range = {n_range}")
+        q = 2 * e * np.diag(n_range)
+        print(f"q: {q}")
+        n = q / (2 * e)
+        print(f"n: {n}")
+        n = np.diag(n_range / (2 * e))
+        print(f"n: {n}")
+        q_2 = (4 * e**2) * np.diag((2 * e * n_range) ** 2)
+        n_2 = q_2 / (4 * e**2)
+        print(f"n_2: {n_2}")
+        self.phi = (self._phi_range / 2) * self._diag_base  # phi is a list.
         Phi = 0.5 * (
             np.diag(self._off_diag, -1) + np.diag(self._off_diag, 1)
         )  # Obs! This is already cos(phi) in the charge basis
@@ -226,10 +236,10 @@ class Fluxonium(Qubit):
         phi_ext: float = np.pi,
         N: int = None,
         basis: str = "flux",  # Default basis for Fluxonium
-        cutoff: float = None,
+        phi_range: float = None,
     ):
         # Initialize with hamiltonian calculation disabled
-        super().__init__(N, cutoff, basis, init_hamiltonian=False)
+        super().__init__(N, phi_range, basis, init_hamiltonian=False)
         # Set specific attributes
         self._E_C = E_C
         self._E_J = E_J
@@ -306,16 +316,14 @@ class Fluxonium(Qubit):
         # Generate and correct eigenvalues and eigenvectors
         eig_vals, eig_vecs = LA.eigh(H)
         eig_vals = eig_vals - eig_vals[0]  # Shift eigenvalues to start from zero
-        # print(f"Eigenvalues: {eig_vals}")
         eig_vecs = eig_vecs.T
         for j in range(len(eig_vecs)):
-            for i in eig_vecs[j]:
-                if not np.isclose(i, 0):
-                    phase = i / np.abs(i)  # Get the phase of the complex number
-                    eig_vecs[j] = (
-                        eig_vecs[j] / phase
-                    )  # Multiply the eigenvector by the phase
-                    break
+            # Find the index of the maximum absolute value in the eigenvector
+            max_idx = np.argmax(np.abs(eig_vecs[j]))
+            if not np.isclose(eig_vecs[j][max_idx], 0):
+                # Use the phase of the maximum component for correction
+                phase = eig_vecs[j][max_idx] / np.abs(eig_vecs[j][max_idx])
+                eig_vecs[j] = eig_vecs[j] / phase
         return eig_vals, eig_vecs
 
 
@@ -330,18 +338,20 @@ class Transmon(Qubit):
         E_C: float = 1.0,
         E_J1: float = 1.0,
         E_J2: float = 1.0,
+        E_L: float = 0.0,
         ng: float = 0.5,
         N: int = None,
         phi_ext: float = np.pi,
         basis: str = "charge",
-        cutoff: float = None,
+        phi_range: float = None,
     ):
         # Initialize with hamiltonian calculation disabled
-        super().__init__(N, cutoff, basis, init_hamiltonian=False)
+        super().__init__(N, phi_range, basis, init_hamiltonian=False)
         # Set specific attributes
         self._E_C = E_C
         self._E_J1 = E_J1
         self._E_J2 = E_J2
+        self._E_L = E_L
         self._ng = ng
         self._phi_ext = phi_ext
         # Now calculate the Hamiltonian
@@ -409,47 +419,53 @@ class Transmon(Qubit):
 
     @property
     def potential(self):
-        if self._basis == "flux":
-            # Potential energy term: E_J * cos(phi - phi_ext)
-            return -self.E_J * np.cos(self.phi)
-        else:
-            return -np.dot(self.E_J, np.diag(self.Phi))
+        # if self._basis == "flux":
+        # Potential energy term: E_J * cos(phi - phi_ext)
+        return -self.E_J * np.cos(self.phi)
+        # else:
+        #     return -np.dot(self.E_J, np.diag(self.Phi))
 
     def hamiltonian(self):
         # Josephson energy term: E_J * cos(phi - phi_ext)
         if self._basis == "flux":
             # Charging energy term: 4E_C(n - n_g)^2
             # C = np.diag(np.dot(4 * self.E_C, (np.diag(self.n) - self.ng) ** 2))
+            print(f"ng: {self.ng}")
+            print(f"n: {self.n}")
+            print(f"n_2: {self.n_2}")
+            C = np.diag(np.dot(4 * self.E_C, (self.n - self.ng) ** 2))
+            print(f"Capacitance part: {C}")
             C = np.dot(4 * self.E_C, (self.n_2 - 2 * np.dot(self.n, self.ng)))
             # print(f"Capacitance part: {C}")
             # C = np.dot(4 * self.E_C, self.n_2)
             # print(f"Capacitance part: {C}")
             # Phi is diagonal in flux basis -> use cos(Phi)
-            JJ = np.diag(-self.E_J * np.cos(np.diag(self.Phi)))
+            JJ = np.diag(-self.E_J * np.cos(self.phi - self.phi_ext))
+            print(f"Josephson part: {JJ}")
         else:
             # Charging energy term: 4E_C(n - n_g)^2
             C = np.diag(np.dot(4 * self.E_C, (np.diag(self.n) - self.ng) ** 2))
+            print(f"Capacitance part: {C}")
             # Phi is cos(φ) operator in charge basis
-            JJ = -self.E_J * self.Phi
+            JJ = -self.E_J * self.Phi  # Here Phi is the cos(φ) operator
         # print(f"Capacitance part: {C}")
         # print(f"Josephson part: {JJ}")
 
         # Total hamiltonian
         H = C + JJ
-        # print(f"Total Hamiltonian: {H}")
+        print(f"Total Hamiltonian: {H}")
 
         # Calculate and correct eigenvalues and eigenvectors
         eig_vals, eig_vecs = LA.eigh(H)
         eig_vals = eig_vals - eig_vals[0]  # Shift eigenvalues to start from zero
         eig_vecs = eig_vecs.T
-        for j in range(len(eig_vecs)):
-            for i in eig_vecs[j]:
-                if not np.isclose(i, 0):
-                    phase = i / np.abs(i)  # Get the phase of the complex number
-                    eig_vecs[j] = (
-                        eig_vecs[j] / phase
-                    )  # Multiply the eigenvector by the phase
-                    break
+        # for j in range(len(eig_vecs)):
+        #     # Find the index of the maximum absolute value in the eigenvector
+        #     max_idx = np.argmax(np.abs(eig_vecs[j]))
+        #     if not np.isclose(eig_vecs[j][max_idx], 0):
+        #         # Use the phase of the maximum component for correction
+        #         phase = eig_vecs[j][max_idx] / np.abs(eig_vecs[j][max_idx])
+        #         eig_vecs[j] = eig_vecs[j] / phase
         return eig_vals, eig_vecs
 
 

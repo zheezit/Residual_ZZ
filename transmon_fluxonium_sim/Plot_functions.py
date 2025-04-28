@@ -175,7 +175,7 @@ def plot_spectrum(
     xlabel=r"$\phi$",
     base_unit_label=None,
     ylim=None,
-    cutoff: float = 2 * np.pi,
+    phi_range: float = 2 * np.pi,
     n_levels=5,
     filename="spectrum_plot",
     format="png",
@@ -243,7 +243,7 @@ def plot_spectrum(
         # add aotation to the energy levels |n>
         label_text = r"$|{0}\rangle$".format(x)
         ax.text(
-            cutoff + 0.2,
+            phi_range / 2 + 0.2,
             eig_vals[x],
             label_text,
             color=wavefunctions["line{0}".format(x)].get_color(),
@@ -254,15 +254,15 @@ def plot_spectrum(
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.set_xlim([-cutoff, cutoff])
-    # print(f"cutoff: {cutoff}")
+    ax.set_xlim([-phi_range / 2, phi_range / 2])
+    # print(f"phi_range: {phi_range}")
     ax.set_title(
         f"{title} wr={wr} GHz \n, E_C:{E_C}, E_J:{E_J}, E_L:{E_L}, a:{anharmonicity}"
     )
 
     if ylim:
         ax.set_ylim(ylim)
-
+    # Format x-axis for π units if specified
     if base_unit_label == "pi":
         ax.xaxis.set_major_formatter(
             plt.FuncFormatter(
@@ -272,7 +272,14 @@ def plot_spectrum(
         ax.xaxis.set_major_locator(plt.MultipleLocator(base=np.pi))
 
     ax.legend(frameon=False, loc="upper right")
-    return ax
+
+    # return ax
+    # Save the figure
+    save_path = os.path.join(os.getcwd(), f"{filename}.{format}")
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Plot saved as: {save_path}")
 
 
 def plot_spectrum_2(
@@ -287,7 +294,7 @@ def plot_spectrum_2(
     base_unit_label=None,
     ylim=None,
     n_levels=5,
-    cutoff: float = 2 * np.pi,
+    phi_range: float = 2 * np.pi,
     filename=None,  # Optional, only used if you want to save separately
     format="png",
     show_prob_density=True,
@@ -350,7 +357,7 @@ def plot_spectrum_2(
         # add aotation to the energy levels |n>
         label_text = r"$|{0}\rangle$".format(x)
         ax.text(
-            cutoff + 0.2,
+            phi_range / 2 + 0.2,
             eig_vals[x],
             label_text,
             color=wavefunctions["line{0}".format(x)].get_color(),
@@ -384,7 +391,7 @@ def plot_spectrum_2(
         # # Add label for energy level
         # label_text = r"$|{0}\rangle$".format(x)
         # ax.text(
-        #     cutoff * 0.8,
+        #     phi_range * 0.8,
         #     eig_vals[x],
         #     label_text,
         #     color=color,
@@ -393,7 +400,7 @@ def plot_spectrum_2(
     # Set axis labels and title
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.set_xlim([-cutoff, cutoff])
+    ax.set_xlim([-phi_range / 2, phi_range / 2])
     ax.set_title(
         f"{title} wr={wr} GHz \nE_C:{E_C}, E_J:{E_J}, E_L:{E_L}, a:{anharmonicity}"
     )
@@ -441,7 +448,7 @@ def plot_fixed(qubit, number_levels=5):
     plt.show()
 
 
-def plot_interactive(qubit, number_levels=5, cutoff=2 * np.pi):
+def plot_interactive(qubit, number_levels=5, phi_range=2 * np.pi):
     """Generalized interactive plot function for any qubit system."""
     fig, ax = plt.subplots()
     fig.subplots_adjust(left=0.1, bottom=0.3)
@@ -463,7 +470,7 @@ def plot_interactive(qubit, number_levels=5, cutoff=2 * np.pi):
     ax.set_xlabel(r"$\phi$")
     ax.set_ylabel(r"Energy/$h$ (GHz)")
     ax.set_ylim([-2, max(eig_vals) + 2])
-    ax.set_xlim([-cutoff, cutoff])
+    ax.set_xlim([-phi_range / 2, phi_range / 2])
 
     sliders = []
 
