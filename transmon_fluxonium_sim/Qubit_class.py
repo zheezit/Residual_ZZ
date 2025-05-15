@@ -109,13 +109,13 @@ class Qubit(ABC):
     def flux_basis(self):
         """Construct flux basis operators. in the aumann paper, they call it Phi, q, q_2, but we call it n, n_2"""
         delta = np.diff(self._phi_range / 2 * self._diag_base)[0]  # Step size
-        print(f"Delta: {delta}")
-        print(f"delta squared: {delta**2}")
-        print(f"1/delta squared: {1/delta**2}")
+        # print(f"Delta: {delta}")
+        # print(f"delta squared: {delta**2}")
+        # print(f"1/delta squared: {1/delta**2}")
         self.phi = (self._phi_range / 2) * self._diag_base  # phi is a list.
-        print(f"phi: {self.phi}")
+        # print(f"phi: {self.phi}")
         Phi = np.diag(self.phi)  # Phi is a diag matrix
-        print(f"Phi: {Phi}")
+        # print(f"Phi: {Phi}")
         # print(f"Phi: {Phi}")
         n = (-1j * hbar / (2 * delta)) * (
             -np.diag(self._off_diag, -1) + np.diag(self._off_diag, 1)
@@ -171,29 +171,29 @@ class Qubit(ABC):
 
             # phi = np.linspace(-np.pi, np.pi, 1001)
 
-            print(f"phi = {self.phi}")
-            print(f"self.phi = {self.phi}")
-            print(f"self.n_range = {self.n_range}")
-            print(f"self.eig_vecs = {self.eig_vecs[k]}")
+            # print(f"phi = {self.phi}")
+            # print(f"self.phi = {self.phi}")
+            # print(f"self.n_range = {self.n_range}")
+            # print(f"self.eig_vecs = {self.eig_vecs[k]}")
             psi = []
             for i, val in enumerate(self.n_range):
-                print(f"val = {val}")
-                print(f"i = {i}")
+                # print(f"val = {val}")
+                # print(f"i = {i}")
                 psi.append(self.eig_vecs[k][i] * np.exp(1j * val * self.phi))
-                print(
-                    f"psi component shape = {(self.eig_vecs[k][i] * np.exp(1j * val * self.phi)).shape}"
-                )
-                print(f"psi = {psi}")
+                # print(
+                #     f"psi component shape = {(self.eig_vecs[k][i] * np.exp(1j * val * self.phi)).shape}"
+                # )
+                # print(f"psi = {psi}")
             psi = np.array(psi)
-            print(f"psi = {psi}")
+            # print(f"psi = {psi}")
             # Sum over Fourier components to get eigenwave
             psi = np.sum(psi, axis=0) / np.sqrt(2 * np.pi)
-            print(f"psi: {psi}")
+            # print(f"psi: {psi}")
             # Normalize Psi
             norm = np.sqrt(np.dot(psi, psi.conj()))
-            print(f"norm: {norm}")
+            # print(f"norm: {norm}")
             psi = psi / norm
-            print(f"psi: {psi}")
+            # print(f"psi: {psi}")
             return psi, self.phi
 
         elif self.basis == "flux":
@@ -230,6 +230,10 @@ class Qubit(ABC):
 
     def n_ij(self, i: int, j: int):
         """Return the matrix element of the charge operator in the energy eigenbasis."""
+        # print(f"i: {i}, j: {j}")
+        # print(f"eig_vecs[i]: {self.eig_vecs[i]}")
+        # print(f"eig_vecs[j]: {self.eig_vecs[j]}")
+        # print(f"n: {self.n}")
         return np.dot(self.eig_vecs[i].conj(), np.dot(self.n, self.eig_vecs[j]))
 
     def Phi_ij(self, i: int, j: int):
@@ -254,8 +258,7 @@ class Qubit(ABC):
                     if thresh is not None:
                         if np.abs(val) < thresh:
                             val = 0
-                            n_op[i, j] = val
-                        n_op[i, j] = val
+                    n_op[i, j] = val
         # print(f"n_op: {n_op}")
         return qt.Qobj(n_op)
 
@@ -354,11 +357,11 @@ class Fluxonium(Qubit):
 
     def hamiltonian(self):
         # capacitance term
-        print(f"Phi: {self.Phi}")
-        print(f"Phi_ext: {self.phi_ext}")
-        print(f"cos(Phi) = {np.cos(np.diag(self.Phi) - self.phi_ext)}")
+        # print(f"Phi: {self.Phi}")
+        # print(f"Phi_ext: {self.phi_ext}")
+        # print(f"cos(Phi) = {np.cos(np.diag(self.Phi) - self.phi_ext)}")
         C = np.dot(4 * self.E_C, self.n_2)
-        print(f"Charge Hamiltonian: {C}")
+        # print(f"Charge Hamiltonian: {C}")
 
         # Josephson energy term
         if self._basis == "flux":
@@ -371,17 +374,17 @@ class Fluxonium(Qubit):
             JJ = self.E_J * self.Phi
             # No flux operator for inductive term in charge basis
             inductor = np.zeros_like(JJ)
-        print(f"Josephson junction Hamiltonian: {- JJ}")
-        print(f"Josephson junction Hamiltonian.shape: {JJ.shape}")
-        print(f"Inductor Hamiltonian: {inductor}")
-        print(f"Inductor Hamiltonian.shape: {inductor.shape}")
+        # print(f"Josephson junction Hamiltonian: {- JJ}")
+        # print(f"Josephson junction Hamiltonian.shape: {JJ.shape}")
+        # print(f"Inductor Hamiltonian: {inductor}")
+        # print(f"Inductor Hamiltonian.shape: {inductor.shape}")
 
         # Total Hamiltonian
         H = C - JJ + inductor
-        print(f"Total Hamiltonian: {H}")
+        # print(f"Total Hamiltonian: {H}")
         # Generate and correct eigenvalues and eigenvectors
         eig_vals, eig_vecs = LA.eigh(H)
-        eig_vals = eig_vals - eig_vals[0]  # Shift eigenvalues to start from zero
+        # eig_vals = eig_vals - eig_vals[0]  # Shift eigenvalues to start from zero
         eig_vecs = eig_vecs.T
         for j in range(len(eig_vecs)):
             # Find the index of the maximum absolute value in the eigenvector
@@ -497,24 +500,24 @@ class Transmon(Qubit):
             # Charging energy term: 4E_C(n - n_g)^2
             # C = np.diag(np.dot(4 * self.E_C, (np.diag(self.n) - self.ng) ** 2))
             C = np.dot(4 * self.E_C, (self.n_2 - 2 * np.dot(self.n, self.ng)))
-            print(f"Capacitance part: {C}")
+            # print(f"Capacitance part: {C}")
             # C = np.dot(4 * self.E_C, self.n_2)
             # print(f"Capacitance part: {C}")
             # Phi is diagonal in flux basis -> use cos(Phi)
             JJ = np.diag(-self.E_J * np.cos(self.phi - self.phi_ext))
-            print(f"Josephson part: {JJ}")
+            # print(f"Josephson part: {JJ}")
             C = (
                 4
                 * self.E_C
                 * (self.n_2 - 2 * self.ng * self.n + self.ng**2 * np.eye(self.N))
             )
-            print(f"Capacitance part: {C}")
+            # print(f"Capacitance part: {C}")
             JJ = -self.E_J * np.diag(np.cos(np.diag(self.Phi) - self.phi_ext))
-            print(f"Josephson part: {JJ}")
+            # print(f"Josephson part: {JJ}")
         else:
             # Charging energy term: 4E_C(n - n_g)^2
             C = np.diag(np.dot(4 * self.E_C, (np.diag(self.n) - self.ng) ** 2))
-            print(f"Capacitance part: {C}")
+            # print(f"Capacitance part: {C}")
             # Phi is cos(φ) operator in charge basis
             JJ = -self.E_J * self.Phi  # Here Phi is the cos(φ) operator
         # print(f"Capacitance part: {C}")
@@ -522,11 +525,11 @@ class Transmon(Qubit):
 
         # Total hamiltonian
         H = C + JJ
-        print(f"Total Hamiltonian: {H}")
+        # print(f"Total Hamiltonian: {H}")
 
         # Calculate and correct eigenvalues and eigenvectors
         eig_vals, eig_vecs = LA.eigh(H)
-        eig_vals = eig_vals - eig_vals[0]  # Shift eigenvalues to start from zero
+        # eig_vals = eig_vals - eig_vals[0]  # Shift eigenvalues to start from zero
         eig_vecs = eig_vecs.T
         # for j in range(len(eig_vecs)):
         #     # Find the index of the maximum absolute value in the eigenvector

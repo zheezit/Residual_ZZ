@@ -7,7 +7,7 @@ import scipy.linalg as LA
 # Function to create the total Hamiltonian for two coupled systems -----------
 def total_hamiltonian_cap(h1, h2, J, n):
     """
-    Create the total Hamiltonian for two coupled systems.
+    Create the total Hamiltonian for two coupled qubits which are capacitively coupled.
     Parameters:
     H1 (qutip.Qobj): Hamiltonian of the first system.
     H2 (qutip.Qobj): Hamiltonian of the second system.
@@ -21,36 +21,82 @@ def total_hamiltonian_cap(h1, h2, J, n):
     # print(f"H1: {H1}")
     H2 = h2.hamiltonian_qutip(n_levels=n)
     # print(f"H2: {H2}")
-    q_H1 = h1.n_qutip(n_levels=n)
-    # print(f"q_H1: {q_H1}")
-    q_H2 = h2.n_qutip(n_levels=n)
-    # print(f"q_H2: {q_H2}")
+    n_H1 = h1.n_qutip(n_levels=n)
+    # print(f"q_H1: {n_H1}")
+    n_H2 = h2.n_qutip(n_levels=n)
+    # print(f"q_H2: {n_H2}")
     h_id = qt.qeye(n)
     # print(f"h_id: {h_id}")
     H1_qt = qt.tensor([H1, h_id])
     # print(f"H1_qt: {H1_qt}")
     H2_qt = qt.tensor([h_id, H2])
     # print(f"H2_qt: {H2_qt}")
-    H_coupling = J * qt.tensor([q_H1, q_H2])
+    H_coupling = J * qt.tensor([n_H1, n_H2])
     # print(f"H_coupling: {H_coupling}")
-    return 2 * np.pi * (H1_qt + H2_qt + H_coupling)
+    H_total = 2 * np.pi * (H1_qt + H2_qt + H_coupling)
+    # print(f"H_total: {H_total}")
+    return H_total
+
+
+def FloquetCoeff(t, args):
+    # We solved the static Hamiltonian at t=0 to find an energy eigenbasis
+    # We now want to subtract off the static component, and explicitly add it back in
+    # as a time component    [+H(t=0) - H(t=0)] + H(t)
+
+    EL = args["EL"]
+    omega = args["omega"]
+    alpha = args["alpha"]
+
+    coeff = -EL * alpha * np.cos(omega * t)
+    return coeff
+
+
+def FloquetH(qubit1, q_states=4):
+    h_id = qt.qeye(q_states)
+    H_floq = 2 * np.pi * qt.tensor([h_id, qubit1.phi_to_qutip(q_states)])
+    return H_floq
 
 
 # Function to compute ZZ coupling from the lowest four eigenenergies. ----------
 def compute_zz(energies):
     # energies is an array (sorted in ascending order)
-    E00, E01, E10, E11 = energies[0], energies[1], energies[2], energies[3]
-    return (E11 - E01) - (E10 - E00)
+    E00, E10, E01, E11 = energies[0], energies[1], energies[2], energies[3]
+    return (E11 - E01) - (E10 - E00)  # in GHz
 
 
-# Helper function to find the most probable states. -------------------------------
-def get_max_overlap_indices(evecs, targs):
+def get_max_overlap_indices(evecs, targs, prev_evecs=None):
     overlap_idx = []
-    for targ_state in targs:
-        for i, vec in enumerate(evecs):
-            if np.abs(targ_state.overlap(vec)) ** 2 >= 0.5:
-                overlap_idx.append(i)
+    if prev_evecs is None:
+        # First iteration: Use maximum overlap with target states
+        for targ_state in targs:
+            overlaps = [np.abs(targ_state.overlap(vec)) ** 2 for vec in evecs]
+            max_idx = np.argmax(overlaps)
+            overlap_idx.append(max_idx)
+    else:
+        # Subsequent iterations: Use maximum overlap with previous eigenstates
+        for prev_vec in prev_evecs:
+            overlaps = [np.abs(prev_vec.overlap(vec)) ** 2 for vec in evecs]
+            max_idx = np.argmax(overlaps)
+            overlap_idx.append(max_idx)
     return overlap_idx
+
+
+def gate_freqs(eigs):
+    CZ20 = np.abs(eigs[3] - eigs[5])
+    CZ02 = np.abs(eigs[3] - eigs[4])
+    iswap = np.abs(eigs[2] - eigs[1])
+    bswap = np.abs(eigs[3] - eigs[0])
+    return np.array([CZ20, CZ02, iswap, bswap])
+
+
+# # Helper function to find the most probable states. -------------------------------
+# def get_max_overlap_indices(evecs, targs):
+#     overlap_idx = []
+#     for targ_state in targs:
+#         for i, vec in enumerate(evecs):
+#             if np.abs(targ_state.overlap(vec)) ** 2 >= 0.5:
+#                 overlap_idx.append(i)
+#     return overlap_idx
 
 
 # def plot_zz_vs_E_J(
